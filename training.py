@@ -7,7 +7,7 @@ nltk.download('omw-1.4')
 nltk.download('wordnet')
 from nltk.stem import WordNetLemmatizer
 from keras.models import Sequential
-from keras.layers import Dense, Activation, Dropout
+from keras.layers import Dense, Dropout
 from keras.optimizers import SGD
 
 lemmatizer = WordNetLemmatizer()
@@ -30,7 +30,7 @@ words = []
 for word in words2:
     for w in word:
         if w not in ignore_letters:
-            words.append(lemmatizer.lemmatize(w))
+            words.append(lemmatizer.lemmatize(w.lower()))
 
 words = sorted(set(words))
 
