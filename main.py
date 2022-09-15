@@ -1,4 +1,3 @@
-from flask import Flask, jsonify
 import random
 import json
 import pickle
@@ -20,8 +19,11 @@ words = pickle.load(open('words.pkl', 'rb'))
 classes = pickle.load(open('classes.pkl', 'rb'))
 model = load_model('chatbotmodel.h5')
 
-header = ['ticketId', 'message', 'date', 'userId']
+header = ['id','ticketId', 'message', 'date', 'userId']
 filename = 'new_keywords.csv'
+ticketId = 0
+id = 0
+
 with open(filename, 'w', newline="") as file:
     csvwriter = csv.writer(file)
     csvwriter.writerow(header)
@@ -106,7 +108,11 @@ def chat(userId,msg):
         #store message in DB
         if len(msg) > 0:
             current_date_time = datetime.now()
-            data = ['Q1', msg, current_date_time, userId]
+            global ticketId;
+            ticketId+=1
+            global id;
+            id+=1
+            data = [id,'Q'+str(ticketId), msg, current_date_time, userId]
             with open(filename, 'a', newline="") as file:
                 csvwriter = csv.writer(file)
                 csvwriter.writerow(data)
@@ -124,19 +130,67 @@ def generateReport():
         msg_dict={}
         for row in csv_reader:
             if line_count > 0:
-                words = [word for word in row[1].split(" ") if word.lower() not in sw_spacy]
+                words = [word for word in row[2].split(" ") if word.lower() not in sw_spacy]
                 for w in words:
                    if key_dict.__contains__(w):
                         count = key_dict[w]
                         key_dict[w]=count+1
-                        msg = [msg_dict[w],row[1]]
-                        msg_dict[w] = msg
+                        msg_dict[w].append([row[0],row[2]])
+
                    else:
                        key_dict[w]=1
-                       msg_dict[w]=[row[1]]
+                       msg_dict[w]=[[row[0],row[2]]]
             line_count += 1
         res = {'keyCount':key_dict, 'keyMessages': msg_dict}
         return json.dumps(res)
+
+@app.route('/chatbot/tag', methods=['POST'])
+def addTag():
+    args = request.args
+    response = args.get("response")
+    requestparam = args.get("request")
+    tag = args.get("tag")
+    patternIdList = json.loads(args.get("patternIdList"))
+    url = args.get("url")
+
+    id_list = []
+    msg_list = []
+    for p in patternIdList:
+        id_list.append(p[0])
+        msg_list.append(p[1])
+
+    with open(filename, 'r') as file, open("tmp.csv",'w') as file2:
+        csv_reader = csv.reader(file, delimiter=',')
+        csv_writer = csv.writer(file2)
+        for row in csv_reader:
+            if len(row)>0 and row[0] not in id_list:
+                csv_writer.writerow(row)
+
+    with open(filename, 'w', newline="") as file, open("tmp.csv",'r') as file2:
+        csv_writer = csv.writer(file)
+        csv_reader = csv.reader(file2, delimiter=',')
+        for row in csv_reader:
+            csv_writer.writerow(row)
+
+    insert_data = {"tag": tag,
+                   "patterns": msg_list,
+                   "responses": [response],
+                   "context_set": "",
+                   "url":url,
+                   "request":requestparam
+                   }
+
+    file_data = json.loads(open('intents.json').read())
+    with open("intents.json", "w") as file:
+        file_data["intents"].append(insert_data)
+        print(file_data)
+        file.write(json.dumps(file_data, indent=4))
+        file.close()
+
+    print(response+" "+requestparam)
+    global intents
+    intents = json.loads(open('intents.json').read())
+    return "Added tag "+tag
 
 if __name__ == '__main__':
     socketio.run(app, debug=True)
